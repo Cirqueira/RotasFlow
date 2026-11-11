@@ -14,12 +14,12 @@
   function showAuthScreen() {
     el('boot-loader').classList.add('hidden');
     el('app-screen').classList.add('hidden');
-    el('auth-screen').classList.remove('hidden');
+    el('auth-screen').classList.remove('auth-hidden');
   }
 
   function showAppScreen() {
     el('boot-loader').classList.add('hidden');
-    el('auth-screen').classList.add('hidden');
+    el('auth-screen').classList.add('auth-hidden');
     el('app-screen').classList.remove('hidden');
   }
 

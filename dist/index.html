@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RotasFlow — Gestão de Transportes</title>
+  <meta name="description" content="Gestão de transporte corporativo, ordens de serviço, prestação de contas e relatórios." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: {
+              50: '#eef4ff', 100: '#d9e6ff', 200: '#bcd3ff', 300: '#8eb6ff',
+              400: '#598eff', 500: '#3468f6', 600: '#2148eb', 700: '#1c38d8',
+              800: '#1d31af', 900: '#1e2f8a', 950: '#171f54'
+            }
+          },
+          boxShadow: { card: '0 1px 2px rgba(15,23,42,.06), 0 8px 24px -12px rgba(15,23,42,.18)' }
+        }
+      }
+    };
+  </script>
+
+  <link rel="stylesheet" href="assets/css/styles.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans antialiased">
+
+  <!-- ===== Boot loader ===== -->
+  <div id="boot-loader" class="fixed inset-0 z-[100] grid place-items-center bg-slate-950">
+    <div class="flex flex-col items-center gap-4">
+      <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 shadow-lg shadow-brand-600/30">
+        <svg class="h-7 w-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 17H7A2 2 0 0 1 5 15V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 21h4a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 15h.01M15 18h.01" />
+        </svg>
+      </div>
+      <p class="text-sm font-medium text-slate-400">Carregando RotasFlow…</p>
+    </div>
+  </div>
+
+  <!-- ===== Auth screen ===== -->
+  <div id="auth-screen" class="hidden min-h-screen bg-slate-950 lg:grid lg:grid-cols-2">
+    <div class="relative hidden overflow-hidden bg-slate-950 lg:flex lg:flex-col lg:justify-between p-12">
+      <div class="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-brand-600/30 blur-3xl"></div>
+      <div class="absolute -bottom-32 -right-16 h-96 w-96 rounded-full bg-cyan-500/20 blur-3xl"></div>
+      <div class="relative flex items-center gap-3">
+        <div class="grid h-11 w-11 place-items-center rounded-xl bg-brand-600 shadow-lg shadow-brand-600/40">
+          <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17H7A2 2 0 0 1 5 15V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 21h4a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z" />
+          </svg>
+        </div>
+        <div>
+          <p class="text-xl font-bold text-white">RotasFlow</p>
+          <p class="text-xs font-medium uppercase tracking-widest text-brand-300">Gestão de transportes</p>
+        </div>
+      </div>
+
+      <div class="relative max-w-md">
+        <h1 class="text-4xl font-extrabold leading-tight text-white">Toda a operação de transporte em um só lugar.</h1>
+        <p class="mt-4 text-slate-400">Ordens de serviço, motoristas, veículos, comprovantes fotográficos, prestação de contas e relatórios financeiros.</p>
+        <div class="mt-8 grid grid-cols-2 gap-3">
+          <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p class="text-2xl font-bold text-white">OS</p>
+            <p class="text-xs text-slate-400">Ordens de serviço com KM e anexos</p>
+          </div>
+          <div class="rounded-xl border border-white/10 bg-white/5 p-4">
+            <p class="text-2xl font-bold text-white">R$</p>
+            <p class="text-xs text-slate-400">Faturamento, repasses e lucro</p>
+          </div>
+        </div>
+      </div>
+
+      <p class="relative text-xs text-slate-500">© <span data-year></span> RotasFlow</p>
+    </div>
+
+    <div class="flex min-h-screen items-center justify-center px-5 py-12 lg:min-h-0">
+      <div class="w-full max-w-sm">
+        <div class="mb-8 flex items-center gap-3 lg:hidden">
+          <div class="grid h-11 w-11 place-items-center rounded-xl bg-brand-600">
+            <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 17H7A2 2 0 0 1 5 15V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 21h4a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z" />
+            </svg>
+          </div>
+          <p class="text-xl font-bold text-white">RotasFlow</p>
+        </div>
+
+        <h2 id="auth-title" class="text-2xl font-bold text-white">Acessar o sistema</h2>
+        <p id="auth-subtitle" class="mt-1 text-sm text-slate-400">Entre com seu e-mail e senha corporativos.</p>
+
+        <form id="login-form" class="mt-7 space-y-4">
+          <div id="login-name-field" class="hidden">
+            <label class="mb-1.5 block text-sm font-medium text-slate-300" for="login-name">Nome completo</label>
+            <input id="login-name" type="text" autocomplete="name" class="input-dark" placeholder="Seu nome" />
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-slate-300" for="login-email">E-mail</label>
+            <input id="login-email" type="email" required autocomplete="email" class="input-dark" placeholder="voce@empresa.com" />
+          </div>
+          <div>
+            <label class="mb-1.5 block text-sm font-medium text-slate-300" for="login-password">Senha</label>
+            <div class="relative">
+              <input id="login-password" type="password" required autocomplete="current-password" class="input-dark pr-11" placeholder="••••••••" />
+              <button type="button" data-toggle-password="login-password" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300" aria-label="Mostrar senha">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <p id="login-error" class="hidden rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300"></p>
+
+          <button id="login-submit" type="submit" class="btn-primary w-full justify-center py-2.5">
+            <span class="btn-label">Entrar</span>
+          </button>
+        </form>
+
+        <div class="mt-6 flex items-center justify-between text-sm">
+          <button id="auth-toggle-signup" type="button" class="font-medium text-brand-400 hover:text-brand-300">Criar conta</button>
+          <span class="text-slate-600">Acesso restrito</span>
+        </div>
+
+        <p class="mt-8 text-center text-xs text-slate-500">Problemas para acessar? Fale com o administrador do sistema.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== App screen ===== -->
+  <div id="app-screen" class="hidden min-h-screen">
+    <!-- Mobile overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 z-30 hidden bg-slate-950/60 backdrop-blur-sm lg:hidden"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col bg-slate-950 transition-transform duration-200 lg:translate-x-0">
+      <div class="flex h-16 items-center gap-3 border-b border-white/5 px-5">
+        <div class="grid h-9 w-9 place-items-center rounded-lg bg-brand-600">
+          <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17H7A2 2 0 0 1 5 15V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 21h4a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2Z" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <p class="truncate text-sm font-bold text-white">RotasFlow</p>
+          <p class="truncate text-[11px] font-medium uppercase tracking-widest text-slate-500">Gestão de transportes</p>
+        </div>
+        <button id="sidebar-close" class="ml-auto text-slate-500 hover:text-white lg:hidden" aria-label="Fechar menu">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <nav id="sidebar-nav" class="flex-1 space-y-1 overflow-y-auto px-3 py-4"></nav>
+
+      <div class="border-t border-white/5 p-3">
+        <div class="flex items-center gap-3 rounded-xl bg-white/5 p-3">
+          <div id="sidebar-avatar" class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white">RF</div>
+          <div class="min-w-0 flex-1">
+            <p id="sidebar-user-name" class="truncate text-sm font-semibold text-white">Usuário</p>
+            <p id="sidebar-user-role" class="truncate text-xs text-slate-400">—</p>
+          </div>
+          <button id="logout-btn" class="shrink-0 text-slate-500 hover:text-rose-400" title="Sair" aria-label="Sair">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15"/><path stroke-linecap="round" stroke-linejoin="round" d="M18 12H9m9 0-3-3m3 3-3 3"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="lg:pl-72">
+      <header class="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur sm:px-6">
+        <button id="sidebar-open" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Abrir menu">
+          <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        </button>
+        <div class="min-w-0 flex-1">
+          <h1 id="page-title" class="truncate text-lg font-bold text-slate-900">Dashboard</h1>
+          <p id="page-subtitle" class="hidden truncate text-xs text-slate-500 sm:block">Visão geral da operação</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 sm:flex">
+            <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+            <span class="text-xs font-medium text-slate-600">Conectado</span>
+          </div>
+          <button id="topbar-avatar" class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" title="Sua conta">RF</button>
+        </div>
+      </header>
+
+      <main id="page-content" class="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:py-8"></main>
+    </div>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toast-root" class="pointer-events-none fixed bottom-4 right-4 z-[90] flex w-full max-w-sm flex-col gap-2 px-4 sm:px-0"></div>
+  <div id="app-loader" class="fixed inset-0 z-[80] hidden place-items-center bg-slate-950/40 backdrop-blur-[2px]">
+    <div class="flex items-center gap-3 rounded-xl bg-white px-5 py-4 shadow-xl">
+      <svg class="h-5 w-5 animate-spin text-brand-600" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z"></path></svg>
+      <span class="text-sm font-medium text-slate-700">Processando…</span>
+    </div>
+  </div>
+
+  <!-- ===== Scripts ===== -->
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/supabase-client.js"></script>
+  <script src="assets/js/utils.js"></script>
+  <script src="assets/js/ui.js"></script>
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/pages/dashboard.js"></script>
+  <script src="assets/js/pages/clientes.js"></script>
+  <script src="assets/js/pages/motoristas.js"></script>
+  <script src="assets/js/pages/veiculos.js"></script>
+  <script src="assets/js/pages/tipos-servico.js"></script>
+  <script src="assets/js/pages/ordens.js"></script>
+  <script src="assets/js/pages/contas.js"></script>
+  <script src="assets/js/pages/relatorios.js"></script>
+  <script src="assets/js/pages/perfis.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

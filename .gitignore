@@ -1,0 +1,16 @@
+# Dependências e artefatos gerados
+node_modules/
+*.log
+
+# Arquivos de ambiente e segredos
+.env
+.env.*
+ProjetoApoio/
+
+# Documentos internos que não precisam ir para o repositório público
+implementacao.md
+desenvolvido.md
+
+# Arquivos de sistema
+Thumbs.db
+.DS_Store

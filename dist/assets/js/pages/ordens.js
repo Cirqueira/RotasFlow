@@ -229,6 +229,7 @@
     const isEdit = !!row;
     const o = row || {
       status: 'Solicitada',
+      motorista_id: RF.app.getMotoristaId(),
       data_hora: new Date().toISOString(),
       origem: '',
       destino: '',

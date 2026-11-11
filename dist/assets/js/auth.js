@@ -83,7 +83,7 @@
   }
 
   async function loadMotorista(profile) {
-    if (!profile || profile.nivel_acesso !== 'motorista' || !profile.email) return null;
+    if (!profile || !profile.email) return null;
     const { data } = await sb
       .from('motoristas')
       .select('*')

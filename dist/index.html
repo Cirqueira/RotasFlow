@@ -5,6 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>RotasFlow — Gestão de Transportes</title>
   <meta name="description" content="Gestão de transporte corporativo, ordens de serviço, prestação de contas e relatórios." />
+  <meta name="theme-color" content="#020617" />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('rotasflow-theme');
+        document.documentElement.setAttribute('data-theme', saved || 'claro');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'claro');
+      }
+    })();
+  </script>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -192,6 +203,12 @@
             <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
             <span class="text-xs font-medium text-slate-600">Conectado</span>
           </div>
+          <button id="topbar-theme" class="btn-icon" title="Aparência" aria-label="Alterar tema">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18h1.5a2.25 2.25 0 0 0 0-4.5H12a2.25 2.25 0 0 1 0-4.5h4.5a4.5 4.5 0 0 0 0-9H12Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h.008v.008H7.5V8.25Zm3.75 2.25h.008v.008H11.25V10.5Zm3.75-1.5h.008v.008H15V9Z" />
+            </svg>
+          </button>
           <button id="topbar-avatar" class="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-xs font-bold text-white" title="Sua conta">RF</button>
         </div>
       </header>
@@ -213,6 +230,7 @@
   <script src="assets/js/config.js"></script>
   <script src="assets/js/supabase-client.js"></script>
   <script src="assets/js/utils.js"></script>
+  <script src="assets/js/theme.js"></script>
   <script src="assets/js/ui.js"></script>
   <script src="assets/js/auth.js"></script>
   <script src="assets/js/pages/dashboard.js"></script>

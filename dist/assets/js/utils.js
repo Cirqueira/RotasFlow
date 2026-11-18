@@ -3,6 +3,25 @@
   const currencyFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
   const numberFmt = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const AVATAR_OPTIONS = [
+    { id: 'car', emoji: '🚗', bg: '#DBEAFE', color: '#1D4ED8' },
+    { id: 'truck', emoji: '🚚', bg: '#DCFCE7', color: '#15803D' },
+    { id: 'bus', emoji: '🚌', bg: '#FEF3C7', color: '#B45309' },
+    { id: 'moto', emoji: '🏍️', bg: '#FFE4E6', color: '#BE123C' },
+    { id: 'plane', emoji: '✈️', bg: '#E0E7FF', color: '#4338CA' },
+    { id: 'box', emoji: '📦', bg: '#F1F5F9', color: '#334155' },
+    { id: 'pilot', emoji: '🧑‍✈️', bg: '#CFFAFE', color: '#0E7490' },
+    { id: 'office-m', emoji: '👨‍💼', bg: '#EDE9FE', color: '#6D28D9' },
+    { id: 'office-f', emoji: '👩‍💼', bg: '#FAE8FF', color: '#A21CAF' },
+    { id: 'tools', emoji: '🛠️', bg: '#FFEDD5', color: '#C2410C' },
+    { id: 'star', emoji: '⭐', bg: '#FEF9C3', color: '#A16207' },
+    { id: 'road', emoji: '🛣️', bg: '#E2E8F0', color: '#475569' },
+    { id: 'dog', emoji: '🐶', bg: '#FFEDD5', color: '#9A3412' },
+    { id: 'cat', emoji: '🐱', bg: '#F3E8FF', color: '#7E22CE' },
+    { id: 'tiger', emoji: '🐯', bg: '#FED7AA', color: '#C2410C' },
+    { id: 'lion', emoji: '🦁', bg: '#FEF08A', color: '#A16207' }
+  ];
+
   const STATUS = {
     'Solicitada': { badge: 'badge-amber', dot: 'bg-amber-500', text: 'text-amber-700' },
     'Em Andamento': { badge: 'badge-blue', dot: 'bg-blue-500', text: 'text-blue-700' },
@@ -130,6 +149,29 @@
       if (!parts.length) return 'RF';
       if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    },
+
+    AVATAR_OPTIONS,
+
+    avatarOption(id) {
+      if (!id) return null;
+      return AVATAR_OPTIONS.find((a) => a.id === id) || null;
+    },
+
+    avatar(profile, opts) {
+      const p = profile || {};
+      const o = opts || {};
+      const size = o.size || 'h-9 w-9';
+      const text = o.text || 'text-xs';
+      const defBg = o.defBg || 'bg-brand-600';
+      const defText = o.defText || 'text-white';
+      const extra = o.extra || '';
+      const opt = utils.avatarOption(p.avatar);
+      const base = `grid shrink-0 place-items-center overflow-hidden rounded-full font-bold ${size} ${text} ${extra}`.replace(/\s+/g, ' ').trim();
+      if (opt) {
+        return `<div class="${base}" style="background:${opt.bg};color:${opt.color}" aria-label="Avatar"><span aria-hidden="true" class="leading-none">${opt.emoji}</span></div>`;
+      }
+      return `<div class="${base} ${defBg} ${defText}" aria-label="Avatar">${utils.escape(utils.initials(p.nome))}</div>`;
     },
 
     statusMeta(status) {

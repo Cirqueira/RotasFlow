@@ -30,7 +30,7 @@
         <tr>
           <td>
             <div class="flex items-center gap-3">
-              <div class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-bold text-brand-700">${U.escape(U.initials(p.nome))}</div>
+              ${U.avatar(p, { size: 'h-9 w-9', text: 'text-xs', defBg: 'bg-brand-50', defText: 'text-brand-700' })}
               <div class="min-w-0">
                 <p class="truncate font-semibold text-slate-800">${U.escape(p.nome)}</p>
                 <p class="truncate text-xs text-slate-500">${U.escape(p.email)}</p>
@@ -77,16 +77,16 @@
 
   function openForm(row) {
     const isEdit = !!row;
-    const p = row || { id: '', nome: '', email: '', nivel_acesso: 'motorista', ativo: true };
+    const p = row || { id: '', nome: '', email: '', nivel_acesso: 'motorista', ativo: true, avatar: '' };
 
     RF.ui.openModal({
       title: isEdit ? 'Editar perfil' : 'Novo perfil',
-      subtitle: isEdit ? p.email : 'Vincule um usuário do Supabase Auth',
+      subtitle: isEdit ? p.email : 'Vincule um usu?rio do Supabase Auth',
       size: 'max-w-lg',
       content: `
         <form id="perfil-form" class="space-y-4">
           <div>
-            <label class="label" for="pf-id">UUID do usuário (Auth)</label>
+            <label class="label" for="pf-id">UUID do usu?rio (Auth)</label>
             <input id="pf-id" class="input font-mono text-xs" ${isEdit ? 'disabled' : 'required'} value="${U.escape(p.id)}" placeholder="00000000-0000-0000-0000-000000000000" />
             ${isEdit ? '' : '<p class="mt-1 text-xs text-slate-500">Copie o UUID em Supabase &gt; Authentication &gt; Users.</p>'}
           </div>
@@ -100,7 +100,7 @@
           </div>
           <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label class="label" for="pf-nivel">Nível de acesso</label>
+              <label class="label" for="pf-nivel">N?vel de acesso</label>
               <select id="pf-nivel" class="input">
                 ${NIVEIS.map((n) => `<option value="${n.value}" ${p.nivel_acesso === n.value ? 'selected' : ''}>${n.label}</option>`).join('')}
               </select>
@@ -108,18 +108,50 @@
             <div class="flex items-end">
               <label class="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
                 <input id="pf-ativo" type="checkbox" class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" ${p.ativo === false ? '' : 'checked'} />
-                <span class="text-sm font-medium text-slate-700">Usuário ativo</span>
+                <span class="text-sm font-medium text-slate-700">Usu?rio ativo</span>
               </label>
             </div>
           </div>
+          <div>
+            <label class="label">Avatar</label>
+            <div id="pf-avatar-picker" class="grid grid-cols-7 gap-2"></div>
+          </div>
           <p class="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-            Para motoristas, use o mesmo e-mail cadastrado no módulo de Motoristas. Assim o usuário verá apenas as próprias ordens de serviço.
+            Para motoristas, use o mesmo e-mail cadastrado no m?dulo de Motoristas. Assim o usu?rio ver? apenas as pr?prias ordens de servi?o.
           </p>
         </form>`,
       footer: `
         <button type="button" class="btn-secondary" data-modal-close>Cancelar</button>
-        <button type="submit" form="perfil-form" class="btn-primary" data-save>${isEdit ? 'Salvar alterações' : 'Cadastrar perfil'}</button>`,
+        <button type="submit" form="perfil-form" class="btn-primary" data-save>${isEdit ? 'Salvar altera??es' : 'Cadastrar perfil'}</button>`,
       onMount(root, close) {
+        let selectedAvatar = p.avatar || '';
+        const picker = root.querySelector('#pf-avatar-picker');
+        const nameInput = root.querySelector('#pf-nome');
+
+        function renderPicker() {
+          if (!picker) return;
+          const nome = nameInput ? nameInput.value : (p.nome || '');
+          const initialsBtn = `<button type="button" data-avatar="" class="avatar-opt flex h-10 w-10 items-center justify-center rounded-full border-2 text-[10px] font-bold transition ${!selectedAvatar ? 'border-brand-600 ring-2 ring-brand-200' : 'border-slate-200 hover:border-slate-300'} bg-brand-600 text-white" title="Iniciais">${U.escape(U.initials(nome))}</button>`;
+          const opts = (U.AVATAR_OPTIONS || []).map((a) => {
+            const sel = selectedAvatar === a.id;
+            return `<button type="button" data-avatar="${U.escape(a.id)}" class="avatar-opt flex h-10 w-10 items-center justify-center rounded-full border-2 text-base transition ${sel ? 'border-brand-600 ring-2 ring-brand-200' : 'border-transparent hover:border-slate-300'}" style="background:${a.bg};color:${a.color}" title="${U.escape(a.id)}"><span aria-hidden="true">${a.emoji}</span></button>`;
+          }).join('');
+          picker.innerHTML = initialsBtn + opts;
+        }
+        renderPicker();
+
+        if (nameInput) {
+          nameInput.addEventListener('input', () => { if (!selectedAvatar) renderPicker(); });
+        }
+        if (picker) {
+          picker.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('[data-avatar]');
+            if (!btn) return;
+            selectedAvatar = btn.getAttribute('data-avatar') || '';
+            renderPicker();
+          });
+        }
+
         const form = root.querySelector('#perfil-form');
         form.addEventListener('submit', async (event) => {
           event.preventDefault();
@@ -127,11 +159,11 @@
 
           if (isEdit && RF.state.profile && p.id === RF.state.profile.id) {
             if (!root.querySelector('#pf-ativo').checked) {
-              RF.ui.toast('Você não pode desativar o seu próprio acesso.', 'error');
+              RF.ui.toast('Voc? n?o pode desativar o seu pr?prio acesso.', 'error');
               return;
             }
             if (root.querySelector('#pf-nivel').value !== 'admin') {
-              RF.ui.toast('Você não pode remover o seu próprio nível de administrador.', 'error');
+              RF.ui.toast('Voc? n?o pode remover o seu pr?prio n?vel de administrador.', 'error');
               return;
             }
           }
@@ -139,13 +171,14 @@
           const payload = {
             nome: root.querySelector('#pf-nome').value.trim(),
             nivel_acesso: root.querySelector('#pf-nivel').value,
-            ativo: root.querySelector('#pf-ativo').checked
+            ativo: root.querySelector('#pf-ativo').checked,
+            avatar: selectedAvatar || null
           };
 
           if (!isEdit) {
             const id = root.querySelector('#pf-id').value.trim();
             if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-              RF.ui.toast('Informe um UUID válido.', 'error');
+              RF.ui.toast('Informe um UUID v?lido.', 'error');
               return;
             }
             payload.id = id;
@@ -154,7 +187,7 @@
 
           const saveBtn = root.querySelector('[data-save]');
           saveBtn.disabled = true;
-          saveBtn.textContent = 'Salvando…';
+          saveBtn.textContent = 'Salvando...';
           RF.ui.loading(true);
 
           try {
@@ -165,6 +198,10 @@
               const { error } = await sb.from('perfis_usuarios').insert(payload);
               if (error) throw error;
             }
+            if (isEdit && RF.state.profile && p.id === RF.state.profile.id) {
+              RF.state.profile = Object.assign({}, RF.state.profile, payload);
+              if (RF.app && RF.app.updateUserChips) RF.app.updateUserChips();
+            }
             close();
             RF.ui.toast(isEdit ? 'Perfil atualizado.' : 'Perfil cadastrado.');
             refresh();
@@ -173,7 +210,7 @@
           } finally {
             RF.ui.loading(false);
             saveBtn.disabled = false;
-            saveBtn.textContent = isEdit ? 'Salvar alterações' : 'Cadastrar perfil';
+            saveBtn.textContent = isEdit ? 'Salvar altera??es' : 'Cadastrar perfil';
           }
         });
       }

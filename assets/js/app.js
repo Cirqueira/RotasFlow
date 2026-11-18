@@ -134,17 +134,122 @@
     });
   }
 
+  function setAvatarElement(el, profile, defBg, defText) {
+    if (!el) return;
+    const opt = U.avatarOption(profile && profile.avatar);
+    if (opt) {
+      el.innerHTML = `<span aria-hidden="true" class="leading-none">${opt.emoji}</span>`;
+      el.style.background = opt.bg;
+      el.style.color = opt.color;
+    } else {
+      el.textContent = U.initials((profile && profile.nome) || 'RF');
+      el.style.background = defBg || '';
+      el.style.color = defText || '';
+    }
+  }
+
   function updateUserChips() {
     const profile = RF.state.profile || {};
-    const nome = profile.nome || 'Usuário';
-    const role = U.ROLES[profile.nivel_acesso] || profile.nivel_acesso || '—';
-    const initials = U.initials(nome);
+    const nome = profile.nome || 'Usuǭrio';
+    const role = U.ROLES[profile.nivel_acesso] || profile.nivel_acesso || '�?"';
 
     document.getElementById('sidebar-user-name').textContent = nome;
     document.getElementById('sidebar-user-role').textContent = role;
-    document.getElementById('sidebar-avatar').textContent = initials;
-    document.getElementById('topbar-avatar').textContent = initials;
-    document.getElementById('topbar-avatar').title = `${nome} · ${role}`;
+    setAvatarElement(document.getElementById('sidebar-avatar'), profile);
+    setAvatarElement(document.getElementById('topbar-avatar'), profile);
+    const topbar = document.getElementById('topbar-avatar');
+    if (topbar) topbar.title = `${nome} �� ${role}`;
+  }
+
+  function openAccountModal() {
+    const p = RF.state.profile;
+    if (!p) return;
+    const currentAvatar = p.avatar || '';
+    const initialsOpt = `
+      <button type="button" data-avatar="" class="avatar-opt flex h-11 w-11 items-center justify-center rounded-full border-2 text-[10px] font-bold transition ${!currentAvatar ? 'border-brand-600 ring-2 ring-brand-200' : 'border-slate-200 hover:border-slate-300'} bg-brand-600 text-white" title="Iniciais">
+        ${U.escape(U.initials(p.nome))}
+      </button>`;
+    const optsHtml = (U.AVATAR_OPTIONS || []).map((a) => {
+      const sel = currentAvatar === a.id;
+      return `<button type="button" data-avatar="${U.escape(a.id)}" class="avatar-opt flex h-11 w-11 items-center justify-center rounded-full border-2 text-lg transition ${sel ? 'border-brand-600 ring-2 ring-brand-200' : 'border-transparent hover:border-slate-300'}" style="background:${a.bg};color:${a.color}" title="${U.escape(a.id)}"><span aria-hidden="true">${a.emoji}</span></button>`;
+    }).join('');
+
+    RF.ui.openModal({
+      title: 'Preferências',
+      size: 'max-w-md',
+      content: `
+        <div class="flex items-center gap-4">
+          <div id="account-avatar-preview">${U.avatar(p, { size: 'h-14 w-14', text: 'text-lg' })}</div>
+          <div class="min-w-0">
+            <p class="truncate text-base font-bold text-slate-900">${U.escape(p.nome || '�?"')}</p>
+            <p class="truncate text-sm text-slate-500">${U.escape(p.email || '�?"')}</p>
+            <div class="mt-1">${U.roleBadge(p.nivel_acesso)}</div>
+          </div>
+        </div>
+        <dl class="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+          <div><dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</dt><dd class="text-sm font-medium ${p.ativo === false ? 'text-rose-600' : 'text-emerald-600'}">${p.ativo === false ? 'Inativo' : 'Ativo'}</dd></div>
+          <div><dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Motorista vinculado</dt><dd class="text-sm font-medium text-slate-800">${RF.state.motorista ? U.escape(RF.state.motorista.nome) : '�?"'}</dd></div>
+        </dl>
+        <div class="mt-5 border-t border-slate-100 pt-4">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Seu avatar</p>
+          <p class="mb-3 text-xs text-slate-500">Selecione uma op��ǜo para personalizar seu perfil.</p>
+          <div id="avatar-picker" class="grid grid-cols-6 gap-2">${initialsOpt}${optsHtml}</div>
+        </div>
+        <div class="mt-5 border-t border-slate-100 pt-4">
+          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Aparência</p>
+          <p class="mb-3 text-xs text-slate-500">Escolha o tema da interface. A preferência fica salva neste navegador.</p>
+          <div id="theme-picker" class="grid grid-cols-2 gap-2">${RF.theme.optionsHtml()}</div>
+        </div>`,
+      footer: `<button type="button" class="btn-secondary" data-modal-close>Fechar</button>`,
+      onMount(root) {
+        const themePicker = root.querySelector('#theme-picker');
+        if (themePicker) {
+          RF.theme.sync();
+          themePicker.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('[data-theme-option]');
+            if (!btn) return;
+            RF.theme.set(btn.getAttribute('data-theme-option'));
+          });
+        }
+        const picker = root.querySelector('#avatar-picker');
+        const preview = root.querySelector('#account-avatar-preview');
+        if (!picker) return;
+        picker.addEventListener('click', async (ev) => {
+          const btn = ev.target.closest('[data-avatar]');
+          if (!btn || btn.disabled) return;
+          const chosen = btn.getAttribute('data-avatar') || null;
+          if ((RF.state.profile.avatar || '') === (chosen || '')) return;
+          const buttons = Array.from(picker.querySelectorAll('[data-avatar]'));
+          buttons.forEach((b) => { b.disabled = true; b.classList.add('opacity-60'); });
+          try {
+            const { data, error } = await RF.supabase
+              .from('perfis_usuarios')
+              .update({ avatar: chosen || null })
+              .eq('id', RF.state.profile.id)
+              .select()
+              .single();
+            if (error) throw error;
+            RF.state.profile = Object.assign({}, RF.state.profile, data || { avatar: chosen || null });
+            updateUserChips();
+            if (preview) preview.innerHTML = U.avatar(RF.state.profile, { size: 'h-14 w-14', text: 'text-lg' });
+            buttons.forEach((b) => {
+              const val = b.getAttribute('data-avatar') || '';
+              const sel = val === (RF.state.profile.avatar || '');
+              b.classList.toggle('border-brand-600', sel);
+              b.classList.toggle('ring-2', sel);
+              b.classList.toggle('ring-brand-200', sel);
+              b.classList.toggle('border-transparent', !sel && b.getAttribute('data-avatar') !== '');
+              b.classList.toggle('border-slate-200', !sel && b.getAttribute('data-avatar') === '');
+            });
+            RF.ui.toast('Avatar atualizado.');
+          } catch (err) {
+            RF.ui.toast(U.errorMessage(err), 'error');
+          } finally {
+            buttons.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60'); });
+          }
+        });
+      }
+    });
   }
 
   function closeSidebar() {
@@ -245,6 +350,8 @@
     return RF.auth.canSeeFinance();
   };
 
+  app.updateUserChips = updateUserChips;
+
   RF.app = app;
 
   document.addEventListener('click', (event) => {
@@ -295,28 +402,8 @@
   document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
   document.getElementById('sidebar-overlay').addEventListener('click', closeSidebar);
 
-  document.getElementById('topbar-avatar').addEventListener('click', () => {
-    const p = RF.state.profile;
-    if (!p) return;
-    RF.ui.openModal({
-      title: 'Sua conta',
-      size: 'max-w-md',
-      content: `
-        <div class="flex items-center gap-4">
-          <div class="grid h-14 w-14 place-items-center rounded-full bg-brand-600 text-lg font-bold text-white">${U.escape(U.initials(p.nome))}</div>
-          <div class="min-w-0">
-            <p class="truncate text-base font-bold text-slate-900">${U.escape(p.nome || '—')}</p>
-            <p class="truncate text-sm text-slate-500">${U.escape(p.email || '—')}</p>
-            <div class="mt-1">${U.roleBadge(p.nivel_acesso)}</div>
-          </div>
-        </div>
-        <dl class="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-          <div><dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</dt><dd class="text-sm font-medium ${p.ativo === false ? 'text-rose-600' : 'text-emerald-600'}">${p.ativo === false ? 'Inativo' : 'Ativo'}</dd></div>
-          <div><dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Motorista vinculado</dt><dd class="text-sm font-medium text-slate-800">${RF.state.motorista ? U.escape(RF.state.motorista.nome) : '—'}</dd></div>
-        </dl>`,
-      footer: `<button type="button" class="btn-secondary" data-modal-close>Fechar</button>`
-    });
-  });
+  document.getElementById('topbar-avatar').addEventListener('click', openAccountModal);
+  document.getElementById('topbar-theme').addEventListener('click', openAccountModal);
 
   RF.auth.init();
 })();

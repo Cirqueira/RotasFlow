@@ -26,6 +26,10 @@ UPDATE public.gastos_servico
 ALTER TABLE public.gastos_servico
   ALTER COLUMN data_gasto SET DEFAULT CURRENT_DATE;
 
+-- 1.3) Avatar selecion?vel para o perfil do usu?rio
+ALTER TABLE public.perfis_usuarios
+  ADD COLUMN IF NOT EXISTS avatar VARCHAR(50);
+
 -- 2) Índices de desempenho
 CREATE INDEX IF NOT EXISTS idx_os_data_hora       ON public.ordens_servico (data_hora DESC);
 CREATE INDEX IF NOT EXISTS idx_os_motorista       ON public.ordens_servico (motorista_id);
@@ -122,13 +126,14 @@ BEGIN
     INTO v_nivel
     FROM public.perfis_usuarios;
 
-  INSERT INTO public.perfis_usuarios (id, nome, email, nivel_acesso, ativo)
+  INSERT INTO public.perfis_usuarios (id, nome, email, nivel_acesso, ativo, avatar)
   VALUES (
     NEW.id,
     COALESCE(NULLIF(NEW.raw_user_meta_data ->> 'nome', ''), split_part(NEW.email, '@', 1)),
     NEW.email,
     v_nivel,
-    TRUE
+    TRUE,
+    NULL
   )
   ON CONFLICT (id) DO NOTHING;
 
@@ -208,11 +213,20 @@ CREATE POLICY perfis_insert ON public.perfis_usuarios
     )
   );
 
+-- Admin edita qualquer perfil; usuǭrio pode editar o pr��prio perfil, mas
+-- nǜo pode alterar n��vel de acesso, status ativo nem UUID pr��prio.
 DROP POLICY IF EXISTS perfis_update ON public.perfis_usuarios;
 CREATE POLICY perfis_update ON public.perfis_usuarios
   FOR UPDATE TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
+  USING (public.is_admin() OR id = auth.uid())
+  WITH CHECK (
+    public.is_admin()
+    OR (
+      id = auth.uid()
+      AND nivel_acesso = (SELECT nivel_acesso FROM public.perfis_usuarios WHERE id = auth.uid())
+      AND ativo = (SELECT ativo FROM public.perfis_usuarios WHERE id = auth.uid())
+    )
+  );
 
 DROP POLICY IF EXISTS perfis_delete ON public.perfis_usuarios;
 CREATE POLICY perfis_delete ON public.perfis_usuarios

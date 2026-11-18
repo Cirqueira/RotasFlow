@@ -9,9 +9,9 @@
   let cache = [];
 
   const SELECT = `
-    id, categoria, valor, observacao, criado_em, ordem_servico_id,
+    id, categoria, valor, observacao, data_gasto, criado_em, ordem_servico_id,
     comprovantes_gasto (id, url_arquivo, nome_arquivo),
-    ordens_servico!inner (
+    ordens_servico (
       id, data_hora, status, motorista_id, valor_cliente, valor_repasse,
       clientes (razao_social_nome),
       motoristas (nome)
@@ -30,16 +30,16 @@
   }
 
   function buildQuery() {
-    let query = sb.from('gastos_servico').select(SELECT).order('criado_em', { ascending: false });
+    let query = sb
+      .from('gastos_servico')
+      .select(SELECT)
+      .order('data_gasto', { ascending: false })
+      .order('criado_em', { ascending: false });
 
-    if (RF.auth.isMotorista()) {
-      const motoristaId = RF.app.getMotoristaId();
-      if (!motoristaId) return null;
-      query = query.eq('ordens_servico.motorista_id', motoristaId);
-    }
+    if (RF.auth.isMotorista() && !RF.app.getMotoristaId()) return null;
     if (filters.categoria) query = query.eq('categoria', filters.categoria);
-    if (filters.start) query = query.gte('criado_em', U.startOfDayISO(filters.start));
-    if (filters.end) query = query.lte('criado_em', U.endOfDayISO(filters.end));
+    if (filters.start) query = query.gte('data_gasto', filters.start);
+    if (filters.end) query = query.lte('data_gasto', filters.end);
 
     return query;
   }
@@ -66,7 +66,7 @@
   function summaryHtml(data) {
     const total = U.sum(data, (g) => g.valor);
     const comprovantes = U.sum(data, (g) => (g.comprovantes_gasto || []).length);
-    const osIds = new Set(data.map((g) => g.ordem_servico_id));
+    const osIds = new Set(data.map((g) => g.ordem_servico_id).filter(Boolean));
     const canSeeFinance = RF.auth.canSeeFinance();
 
     const osMap = new Map();
@@ -128,21 +128,23 @@
       .map((g) => {
         const os = g.ordens_servico || {};
         const comps = g.comprovantes_gasto || [];
+        const osCell = os.id
+          ? `<button type="button" class="text-left" data-open-os="${os.id}">
+               <span class="block font-bold text-slate-700">OS #${os.id}</span>
+               <span class="block max-w-[170px] truncate text-xs text-slate-500">${U.escape(os.clientes ? os.clientes.razao_social_nome : '—')}</span>
+             </button>`
+          : `<span class="block font-bold text-slate-500">Sem OS</span>
+             <span class="block max-w-[170px] truncate text-xs text-slate-400">Gasto avulso</span>`;
         return `
         <tr>
-          <td class="whitespace-nowrap text-xs text-slate-500">${U.dateTime(g.criado_em)}</td>
-          <td>
-            <button type="button" class="text-left" data-open-os="${os.id}">
-              <span class="block font-bold text-slate-700">OS #${os.id}</span>
-              <span class="block max-w-[170px] truncate text-xs text-slate-500">${U.escape(os.clientes ? os.clientes.razao_social_nome : '—')}</span>
-            </button>
-          </td>
+          <td class="whitespace-nowrap text-xs text-slate-500">${U.date(g.data_gasto ? g.data_gasto + 'T00:00:00' : g.criado_em)}</td>
+          <td>${osCell}</td>
           <td class="max-w-[130px] truncate">${U.escape(os.motoristas ? os.motoristas.nome : '—')}</td>
           <td><span class="badge badge-slate">${U.escape(g.categoria)}</span></td>
           <td class="max-w-[220px] truncate text-xs text-slate-500">${U.escape(g.observacao || '—')}</td>
           <td class="whitespace-nowrap text-right font-bold text-slate-800">${U.currency(g.valor)}</td>
           <td>
-            <button type="button" class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50" data-open-os="${os.id}">
+            <button type="button" class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50" data-view-comprovantes="${g.id}">
               <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"/></svg>
               ${comps.length}
             </button>
@@ -157,9 +159,47 @@
       .join('');
   }
 
+  function openComprovantes(gasto) {
+    const comps = gasto.comprovantes_gasto || [];
+    const content = comps.length
+      ? `<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          ${comps
+            .map((c) => {
+              const url = U.escape(c.url_arquivo);
+              const label = U.escape(U.fileLabel(c.url_arquivo, c.nome_arquivo));
+              return `
+                <a href="${url}" target="_blank" rel="noopener" class="group overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                  ${U.isImage(c.url_arquivo)
+                    ? `<div class="thumb"><img src="${url}" alt="${label}" loading="lazy" /></div>`
+                    : `<div class="flex aspect-square flex-col items-center justify-center gap-1 p-2 text-center text-slate-500">
+                         <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+                         <span class="line-clamp-2 text-[10px]">${label}</span>
+                       </div>`}
+                  <span class="block truncate px-2 py-1 text-[10px] text-slate-500">${label}</span>
+                </a>`;
+            })
+            .join('')}
+        </div>`
+      : '<p class="text-sm text-slate-500">Nenhum comprovante anexado.</p>';
+
+    RF.ui.openModal({
+      title: 'Comprovantes',
+      subtitle: `${gasto.categoria} • ${U.currency(gasto.valor)}`,
+      size: 'max-w-lg',
+      content,
+      footer: `<button type="button" class="btn-secondary" data-modal-close>Fechar</button>`
+    });
+  }
+
   function bindRows(scope) {
     scope.querySelectorAll('[data-open-os]').forEach((btn) =>
       btn.addEventListener('click', () => RF.pages.ordens.openDetail(Number(btn.getAttribute('data-open-os'))))
+    );
+    scope.querySelectorAll('[data-view-comprovantes]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const row = cache.find((g) => String(g.id) === btn.getAttribute('data-view-comprovantes'));
+        if (row) openComprovantes(row);
+      })
     );
     scope.querySelectorAll('[data-del]').forEach((btn) =>
       btn.addEventListener('click', () => {
@@ -203,68 +243,8 @@
     if (countEl) countEl.textContent = `${shown.length} lançamento(s) • ${U.currency(U.sum(shown, (g) => g.valor))}`;
   }
 
-  async function openAddGasto() {
-    RF.ui.loading(true);
-    let query = sb
-      .from('ordens_servico')
-      .select('id, data_hora, status, clientes (razao_social_nome), motoristas (nome)')
-      .order('data_hora', { ascending: false })
-      .limit(200);
-
-    if (RF.auth.isMotorista()) {
-      const motoristaId = RF.app.getMotoristaId();
-      if (!motoristaId) {
-        RF.ui.loading(false);
-        RF.ui.toast('Seu usuário não está vinculado a um motorista.', 'warning');
-        return;
-      }
-      query = query.eq('motorista_id', motoristaId);
-    }
-
-    const { data, error } = await query;
-    RF.ui.loading(false);
-
-    if (error) {
-      RF.ui.toast(U.errorMessage(error), 'error');
-      return;
-    }
-    if (!data || !data.length) {
-      RF.ui.toast('Nenhuma ordem de serviço disponível para lançar gasto.', 'warning');
-      return;
-    }
-
-    RF.ui.openModal({
-      title: 'Lançar gasto',
-      subtitle: 'Selecione a ordem de serviço',
-      size: 'max-w-lg',
-      content: `
-        <form id="pick-os-form" class="space-y-4">
-          <div>
-            <label class="label" for="pick-os">Ordem de serviço</label>
-            <select id="pick-os" class="input" required>
-              <option value="">Selecione…</option>
-              ${data
-                .map(
-                  (o) =>
-                    `<option value="${o.id}">#${o.id} — ${U.escape(o.clientes ? o.clientes.razao_social_nome : 'Sem cliente')} — ${U.date(o.data_hora)} (${U.escape(o.status)})</option>`
-                )
-                .join('')}
-            </select>
-          </div>
-        </form>`,
-      footer: `
-        <button type="button" class="btn-secondary" data-modal-close>Cancelar</button>
-        <button type="submit" form="pick-os-form" class="btn-primary">Continuar</button>`,
-      onMount(root, close) {
-        root.querySelector('#pick-os-form').addEventListener('submit', (event) => {
-          event.preventDefault();
-          const id = Number(root.querySelector('#pick-os').value);
-          if (!id) return;
-          close();
-          RF.pages.ordens.openGastoForm({ id });
-        });
-      }
-    });
+  function openAddGasto() {
+    RF.pages.ordens.openGastoForm();
   }
 
   async function remove(row) {
@@ -299,7 +279,7 @@
       container.innerHTML = `
         ${RF.ui.pageHeader({
           title: 'Prestação de Contas',
-          subtitle: 'Despesas, repasses e comprovantes por ordem de serviço',
+          subtitle: 'Despesas, repasses e comprovantes',
           actions: `<button type="button" class="btn-primary" data-add>
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Lançar gasto

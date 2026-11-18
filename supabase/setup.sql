@@ -10,6 +10,22 @@
 ALTER TABLE public.veiculos
   ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
 
+-- 1.1) Gastos podem existir sem vínculo com uma ordem de serviço
+--      (ex.: combustível e pedágio avulsos).
+ALTER TABLE public.gastos_servico
+  ALTER COLUMN ordem_servico_id DROP NOT NULL;
+
+-- 1.2) Data em que o gasto ocorreu (independente da data de lançamento)
+ALTER TABLE public.gastos_servico
+  ADD COLUMN IF NOT EXISTS data_gasto DATE;
+
+UPDATE public.gastos_servico
+   SET data_gasto = criado_em::date
+ WHERE data_gasto IS NULL;
+
+ALTER TABLE public.gastos_servico
+  ALTER COLUMN data_gasto SET DEFAULT CURRENT_DATE;
+
 -- 2) Índices de desempenho
 CREATE INDEX IF NOT EXISTS idx_os_data_hora       ON public.ordens_servico (data_hora DESC);
 CREATE INDEX IF NOT EXISTS idx_os_motorista       ON public.ordens_servico (motorista_id);
@@ -17,6 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_os_cliente         ON public.ordens_servico (clie
 CREATE INDEX IF NOT EXISTS idx_os_status          ON public.ordens_servico (status);
 CREATE INDEX IF NOT EXISTS idx_anexos_os          ON public.anexos_ordem_servico (ordem_servico_id);
 CREATE INDEX IF NOT EXISTS idx_gastos_os          ON public.gastos_servico (ordem_servico_id);
+CREATE INDEX IF NOT EXISTS idx_gastos_data        ON public.gastos_servico (data_gasto DESC);
 CREATE INDEX IF NOT EXISTS idx_comprovantes_gasto ON public.comprovantes_gasto (gasto_servico_id);
 CREATE INDEX IF NOT EXISTS idx_motoristas_email   ON public.motoristas (lower(email));
 
@@ -76,6 +93,7 @@ AS $$
 $$;
 
 -- Verifica se o gasto pertence a uma OS do motorista logado
+-- (gastos sem OS vinculada são considerados acessíveis ao motorista)
 CREATE OR REPLACE FUNCTION public.owns_gasto(p_gasto_id INTEGER)
 RETURNS BOOLEAN
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
@@ -83,9 +101,9 @@ AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.gastos_servico g
-    JOIN public.ordens_servico o ON o.id = g.ordem_servico_id
+    LEFT JOIN public.ordens_servico o ON o.id = g.ordem_servico_id
     WHERE g.id = p_gasto_id
-      AND o.motorista_id = public.current_motorista_id()
+      AND (g.ordem_servico_id IS NULL OR o.motorista_id = public.current_motorista_id())
   )
 $$;
 
@@ -268,23 +286,23 @@ CREATE POLICY anexos_delete ON public.anexos_ordem_servico
 DROP POLICY IF EXISTS gastos_select ON public.gastos_servico;
 CREATE POLICY gastos_select ON public.gastos_servico
   FOR SELECT TO authenticated
-  USING (public.is_staff() OR public.owns_os(ordem_servico_id));
+  USING (public.is_staff() OR ordem_servico_id IS NULL OR public.owns_os(ordem_servico_id));
 
 DROP POLICY IF EXISTS gastos_insert ON public.gastos_servico;
 CREATE POLICY gastos_insert ON public.gastos_servico
   FOR INSERT TO authenticated
-  WITH CHECK (public.is_staff() OR public.owns_os(ordem_servico_id));
+  WITH CHECK (public.is_staff() OR ordem_servico_id IS NULL OR public.owns_os(ordem_servico_id));
 
 DROP POLICY IF EXISTS gastos_update ON public.gastos_servico;
 CREATE POLICY gastos_update ON public.gastos_servico
   FOR UPDATE TO authenticated
-  USING (public.is_staff() OR public.owns_os(ordem_servico_id))
-  WITH CHECK (public.is_staff() OR public.owns_os(ordem_servico_id));
+  USING (public.is_staff() OR ordem_servico_id IS NULL OR public.owns_os(ordem_servico_id))
+  WITH CHECK (public.is_staff() OR ordem_servico_id IS NULL OR public.owns_os(ordem_servico_id));
 
 DROP POLICY IF EXISTS gastos_delete ON public.gastos_servico;
 CREATE POLICY gastos_delete ON public.gastos_servico
   FOR DELETE TO authenticated
-  USING (public.is_staff() OR public.owns_os(ordem_servico_id));
+  USING (public.is_staff() OR ordem_servico_id IS NULL OR public.owns_os(ordem_servico_id));
 
 -- ---------- comprovantes_gasto ----------
 DROP POLICY IF EXISTS comprovantes_select ON public.comprovantes_gasto;

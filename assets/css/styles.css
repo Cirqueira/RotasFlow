@@ -402,6 +402,15 @@ textarea.input {
   vertical-align: top;
 }
 
+input:not([type="password"]):not([type="email"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="date"]):not([type="datetime-local"]):not([type="time"]):not([type="month"]):not([type="week"]):not([type="number"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+textarea {
+  text-transform: uppercase;
+}
+input::placeholder,
+textarea::placeholder {
+  text-transform: none;
+}
+
 @media print {
   body * { visibility: hidden; }
   .pdf-sheet, .pdf-sheet * { visibility: visible; }

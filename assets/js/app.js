@@ -260,16 +260,29 @@
   });
 
   document.addEventListener('input', (event) => {
-    const mask = event.target.getAttribute && event.target.getAttribute('data-mask');
-    if (!mask) return;
-    const start = event.target.selectionStart;
-    const before = event.target.value;
-    const masked = U.applyMask(before, mask);
-    if (masked !== before) {
-      event.target.value = masked;
-      const delta = masked.length - before.length;
+    if (event.isComposing) return;
+    const el = event.target;
+    if (!el || !el.tagName) return;
+    const tag = el.tagName.toUpperCase();
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+    const type = (el.getAttribute('type') || 'text').toLowerCase();
+    const skipUpper = ['password', 'email', 'file', 'checkbox', 'radio', 'date', 'datetime-local', 'time', 'month', 'week', 'number', 'range', 'color', 'hidden', 'button', 'submit', 'reset', 'image'].includes(type);
+    const mask = el.getAttribute('data-mask');
+    if (skipUpper && !mask) return;
+
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const before = el.value;
+    let value = before;
+
+    if (!skipUpper) value = value.toUpperCase();
+    if (mask) value = U.applyMask(value, mask);
+
+    if (value !== before) {
+      el.value = value;
+      const delta = value.length - before.length;
       try {
-        event.target.setSelectionRange(start + delta, start + delta);
+        el.setSelectionRange(start + delta, end + delta);
       } catch (e) { /* ignore */ }
     }
   });

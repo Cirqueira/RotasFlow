@@ -794,8 +794,14 @@
   }
 
   /* ============ Gasto ============ */
-  async function openGastoForm(order) {
+  async function openGastoForm(order, gasto, onSaved) {
     const currentOrder = order || null;
+    const currentGasto = gasto || null;
+    const isEdit = !!currentGasto;
+    const selectedOsId = currentGasto ? currentGasto.ordem_servico_id : currentOrder ? currentOrder.id : null;
+    const comprovantesAtuais = currentGasto ? currentGasto.comprovantes_gasto || [] : [];
+    const gastoData = currentGasto ? currentGasto.data_gasto || currentGasto.criado_em : new Date();
+    const dataValue = U.toDateInput(String(gastoData || '').length === 10 ? gastoData + 'T00:00:00' : gastoData);
 
     RF.ui.loading(true);
     let query = sb
@@ -821,15 +827,17 @@
     const osOptions = orders
       .map(
         (o) =>
-          `<option value="${o.id}"${currentOrder && currentOrder.id === o.id ? ' selected' : ''}>#${o.id} — ${U.escape(o.clientes ? o.clientes.razao_social_nome : 'Sem cliente')} — ${U.date(o.data_hora)} (${U.escape(o.status)})</option>`
+          `<option value="${o.id}"${selectedOsId && String(o.id) === String(selectedOsId) ? ' selected' : ''}>#${o.id} — ${U.escape(o.clientes ? o.clientes.razao_social_nome : 'Sem cliente')} — ${U.date(o.data_hora)} (${U.escape(o.status)})</option>`
       )
       .join('');
 
     RF.ui.openModal({
-      title: currentOrder ? `Lançar gasto — OS #${currentOrder.id}` : 'Lançar gasto',
-      subtitle: currentOrder
-        ? 'Despesas entram no cálculo do lucro líquido'
-        : 'O vínculo com uma ordem de serviço é opcional',
+      title: isEdit ? 'Editar gasto' : currentOrder ? `Lançar gasto — OS #${currentOrder.id}` : 'Lançar gasto',
+      subtitle: isEdit
+        ? 'Ajuste os dados do lançamento'
+        : currentOrder
+          ? 'Despesas entram no cálculo do lucro líquido'
+          : 'O vínculo com uma ordem de serviço é opcional',
       size: 'max-w-xl',
       content: `
         <form id="gasto-form" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -842,30 +850,42 @@
           </div>
           <div>
             <label class="label" for="gs-data">Data do gasto</label>
-            <input id="gs-data" type="date" class="input" required value="${U.toDateInput(new Date())}" />
+            <input id="gs-data" type="date" class="input" required value="${dataValue}" />
           </div>
           <div>
             <label class="label" for="gs-val">Valor (R$)</label>
-            <input id="gs-val" type="number" step="0.01" min="0.01" class="input" required placeholder="0,00" />
+            <input id="gs-val" type="number" step="0.01" min="0.01" class="input" required placeholder="0,00" value="${isEdit ? Number(currentGasto.valor || 0) : ''}" />
           </div>
           <div class="sm:col-span-2">
             <label class="label" for="gs-cat">Categoria</label>
             <select id="gs-cat" class="input" required>
-              ${CATEGORIAS.map((c) => `<option value="${c}">${c}</option>`).join('')}
+              ${CATEGORIAS.map((c) => `<option value="${c}"${isEdit && currentGasto.categoria === c ? ' selected' : ''}>${c}</option>`).join('')}
             </select>
           </div>
           <div class="sm:col-span-2">
             <label class="label" for="gs-obs">Observação</label>
-            <input id="gs-obs" class="input" maxlength="255" placeholder="Ex.: abastecimento no posto X" />
+            <input id="gs-obs" class="input" maxlength="255" placeholder="Ex.: abastecimento no posto X" value="${U.escape(isEdit ? currentGasto.observacao || '' : '')}" />
           </div>
           <div class="sm:col-span-2">
             <label class="label">Comprovantes</label>
-            ${RF.ui.uploadBox('gasto-files', 'Anexar recibos')}
+            ${comprovantesAtuais.length
+              ? `<div class="mb-2 flex flex-wrap gap-2">
+                  ${comprovantesAtuais
+                    .map((c) => {
+                      const url = U.escape(c.url_arquivo);
+                      const label = U.escape(U.fileLabel(c.url_arquivo, c.nome_arquivo));
+                      return `<a href="${url}" target="_blank" rel="noopener" class="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-600 hover:bg-slate-100">${label}</a>`;
+                    })
+                    .join('')}
+                </div>
+                <p class="mb-2 text-[11px] text-slate-400">Os comprovantes atuais serão mantidos.</p>`
+              : ''}
+            ${RF.ui.uploadBox('gasto-files', isEdit ? 'Anexar novos recibos' : 'Anexar recibos')}
           </div>
         </form>`,
       footer: `
         <button type="button" class="btn-secondary" data-modal-close>Cancelar</button>
-        <button type="submit" form="gasto-form" class="btn-primary" data-save>Salvar gasto</button>`,
+        <button type="submit" form="gasto-form" class="btn-primary" data-save>${isEdit ? 'Salvar alterações' : 'Salvar gasto'}</button>`,
       onMount(root, close) {
         const input = root.querySelector('#gasto-files');
         input.addEventListener('change', () => selectedFilesText('gasto-files'));
@@ -889,14 +909,21 @@
               valor: U.toNumber(root.querySelector('#gs-val').value),
               observacao: root.querySelector('#gs-obs').value.trim() || null
             };
-            const { data: gasto, error } = await sb.from('gastos_servico').insert(payload).select().single();
-            if (error) throw error;
+            let gastoId = currentGasto ? currentGasto.id : null;
+            if (isEdit) {
+              const { error } = await sb.from('gastos_servico').update(payload).eq('id', gastoId);
+              if (error) throw error;
+            } else {
+              const { data: gasto, error } = await sb.from('gastos_servico').insert(payload).select().single();
+              if (error) throw error;
+              gastoId = gasto.id;
+            }
 
             const files = Array.from(input.files || []);
             if (files.length) {
-              const uploaded = await uploadFiles(files, `gastos/${gasto.id}`);
+              const uploaded = await uploadFiles(files, `gastos/${gastoId}`);
               const rows = uploaded.map((u) => ({
-                gasto_servico_id: gasto.id,
+                gasto_servico_id: gastoId,
                 url_arquivo: u.url,
                 nome_arquivo: u.nome_arquivo
               }));
@@ -904,8 +931,11 @@
               if (compErr) throw compErr;
             }
 
-            RF.ui.toast('Gasto lançado.');
-            if (currentOrder && savedOsId === currentOrder.id) {
+            RF.ui.toast(isEdit ? 'Gasto atualizado.' : 'Gasto lançado.');
+            if (typeof onSaved === 'function') {
+              close();
+              await onSaved();
+            } else if (currentOrder && savedOsId === currentOrder.id) {
               openDetail(currentOrder.id);
             } else {
               close();
@@ -916,7 +946,7 @@
           } finally {
             RF.ui.loading(false);
             saveBtn.disabled = false;
-            saveBtn.textContent = 'Salvar gasto';
+            saveBtn.textContent = isEdit ? 'Salvar alterações' : 'Salvar gasto';
           }
         });
       }

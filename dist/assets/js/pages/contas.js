@@ -151,6 +151,9 @@
           </td>
           <td class="text-right">
             <div class="flex justify-end gap-1">
+              <button type="button" class="btn-icon" data-view="${g.id}" title="Visualizar gasto">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+              </button>
               <button type="button" class="btn-icon" data-edit="${g.id}" title="Editar gasto">
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z"/></svg>
               </button>
@@ -164,9 +167,8 @@
       .join('');
   }
 
-  function openComprovantes(gasto) {
-    const comps = gasto.comprovantes_gasto || [];
-    const content = comps.length
+  function comprovantesHtml(comps) {
+    return comps.length
       ? `<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
           ${comps
             .map((c) => {
@@ -180,25 +182,81 @@
                          <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
                          <span class="line-clamp-2 text-[10px]">${label}</span>
                        </div>`}
-                  <span class="block truncate px-2 py-1 text-[10px] text-slate-500">${label}</span>
-                </a>`;
+                   <span class="block truncate px-2 py-1 text-[10px] text-slate-500">${label}</span>
+                 </a>`;
             })
             .join('')}
         </div>`
       : '<p class="text-sm text-slate-500">Nenhum comprovante anexado.</p>';
+  }
 
+  function openComprovantes(gasto) {
     RF.ui.openModal({
       title: 'Comprovantes',
       subtitle: `${gasto.categoria} • ${U.currency(gasto.valor)}`,
       size: 'max-w-lg',
-      content,
+      content: comprovantesHtml(gasto.comprovantes_gasto || []),
       footer: `<button type="button" class="btn-secondary" data-modal-close>Fechar</button>`
+    });
+  }
+
+  function openGastoDetail(gasto) {
+    const os = gasto.ordens_servico || {};
+    const comps = gasto.comprovantes_gasto || [];
+
+    RF.ui.openModal({
+      title: `Gasto #${gasto.id}`,
+      subtitle: `${gasto.categoria} • ${U.currency(gasto.valor)}`,
+      size: 'max-w-3xl',
+      content: `
+        <div class="space-y-4">
+          <dl class="grid grid-cols-1 gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:grid-cols-2">
+            ${RF.ui.infoRow('Data do gasto', U.date(gasto.data_gasto ? gasto.data_gasto + 'T00:00:00' : gasto.criado_em))}
+            ${RF.ui.infoRow('Valor', U.currency(gasto.valor))}
+            ${RF.ui.infoRow('Categoria', U.escape(gasto.categoria))}
+            ${RF.ui.infoRow('Lançado em', U.dateTime(gasto.criado_em))}
+            ${RF.ui.infoRow('Ordem de serviço', os.id ? `OS #${os.id}` : 'Gasto avulso')}
+            ${RF.ui.infoRow('Cliente', U.escape(os.clientes ? os.clientes.razao_social_nome : '—'))}
+            ${RF.ui.infoRow('Motorista', U.escape(os.motoristas ? os.motoristas.nome : '—'))}
+            <div class="sm:col-span-2">
+              <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Observação</dt>
+              <dd class="mt-0.5 whitespace-pre-line text-sm text-slate-700">${U.escape(gasto.observacao || '—')}</dd>
+            </div>
+          </dl>
+          <section>
+            <div class="mb-2 flex items-center justify-between">
+              <h4 class="text-sm font-bold text-slate-800">Comprovantes</h4>
+              <span class="text-xs text-slate-400">${comps.length} arquivo(s)</span>
+            </div>
+            ${comprovantesHtml(comps)}
+          </section>
+        </div>`,
+      footer: `
+        <button type="button" class="btn-ghost" data-modal-close>Fechar</button>
+        <button type="button" class="btn-primary" data-edit-gasto>Editar gasto</button>
+        <button type="button" class="btn-danger" data-del-gasto>Excluir</button>`,
+      onMount(root, close) {
+        root.querySelector('[data-edit-gasto]').addEventListener('click', () => {
+          close();
+          RF.pages.ordens.openGastoForm(os, gasto, refresh);
+        });
+        root.querySelector('[data-del-gasto]').addEventListener('click', () => {
+          close();
+          remove(gasto);
+        });
+      }
     });
   }
 
   function bindRows(scope) {
     scope.querySelectorAll('[data-open-os]').forEach((btn) =>
       btn.addEventListener('click', () => RF.pages.ordens.openDetail(Number(btn.getAttribute('data-open-os'))))
+    );
+    scope.querySelectorAll('[data-view]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const row = cache.find((g) => String(g.id) === btn.getAttribute('data-view'));
+        if (row) openGastoDetail(row);
+      })
     );
     scope.querySelectorAll('[data-view-comprovantes]').forEach((btn) =>
       btn.addEventListener('click', () => {
